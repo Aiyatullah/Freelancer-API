@@ -150,10 +150,41 @@ const exportLogsToCSV = (req, res) => {
   }
 };
 
+// GET total earnings for current user
+const getEarningsSummary = (req, res) => {
+  const user = req.user;
+
+  // Filter logs for current user and with earnedAmount
+  const userLogs = logsDB.logs.filter(
+    (log) => log.user === user && log.earnedAmount
+  );
+
+  // Calculate total earnings
+  const totalEarnings = userLogs.reduce(
+    (sum, log) => sum + parseFloat(log.earnedAmount || 0),
+    0
+  );
+
+  // Breakdown by project
+  const projectBreakdown = {};
+  userLogs.forEach((log) => {
+    if (!projectBreakdown[log.project]) {
+      projectBreakdown[log.project] = 0;
+    }
+    projectBreakdown[log.project] += parseFloat(log.earnedAmount || 0);
+  });
+
+  res.json({
+    totalEarnings: totalEarnings.toFixed(2),
+    projectBreakdown
+  });
+};
+
 module.exports = {
   startTimer,
   stopTimer,
   getallTime,
   deleteTimer,
-  exportLogsToCSV
+  exportLogsToCSV,
+  getEarningsSummary
 };
