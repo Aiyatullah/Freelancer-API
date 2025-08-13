@@ -10,7 +10,7 @@ const path = require("path");
 const { Parser } = require("json2csv");
 
 const startTimer = async (req, res) => {
-  const { project, note } = req.body;
+  const { project, note, rate } = req.body; // Added rate
   const user = req.user;
 
   if (!project) return res.status(400).json({ message: "Project is required" });
@@ -23,18 +23,20 @@ const startTimer = async (req, res) => {
 
   const now = new Date();
   const isoStart = now.toISOString();
-  const displayStart = isoStart.slice(0, 16).replace("T", " "); // "YYYY-MM-DD HH:mm"
+  const displayStart = isoStart.slice(0, 16).replace("T", " ");
 
   const newLog = {
     id: newId,
     user,
     project,
-    startTime: isoStart, // For internal logic
-    startTimeDisplay: displayStart, // For display
+    startTime: isoStart,
+    startTimeDisplay: displayStart,
     endTime: null,
     endTimeDisplay: null,
     duration: null,
     note: note || "",
+    rate: rate || null, // store the hourly rate if provided
+    earnedAmount: null, // will be calculated later
   };
 
   logsDB.setLogs([...logsDB.logs, newLog]);
@@ -62,11 +64,17 @@ const stopTimer = async (req, res) => {
 
   const durationInMinutes = Math.round((end - start) / (1000 * 60));
 
-  log.endTime = end.toISOString(); // For internal logic
+  log.endTime = end.toISOString();
   log.endTimeDisplay = end.toISOString().slice(0, 16).replace("T", " ");
   log.duration = `${durationInMinutes} minute${
     durationInMinutes !== 1 ? "s" : ""
   }`;
+
+  // If rate exists, calculate earnings
+  if (log.rate) {
+    const hours = durationInMinutes / 60;
+    log.earnedAmount = (hours * log.rate).toFixed(2); // 2 decimal points
+  }
 
   await fsPromises.writeFile(
     path.join(__dirname, "..", "model", "timeLogs.json"),
@@ -75,6 +83,7 @@ const stopTimer = async (req, res) => {
 
   res.json({ message: "Time log stopped", log });
 };
+
 // Get all logs for the current user
 const getallTime = (req, res) => {
   const user = req.user;
@@ -108,8 +117,6 @@ const deleteTimer = async (req, res) => {
 // export csv
 const exportLogsToCSV = (req, res) => {
   const user = req.user;
-
-  // Filter logs for current user
   const userLogs = logsDB.logs.filter((log) => log.user === user);
 
   if (userLogs.length === 0) {
@@ -117,7 +124,6 @@ const exportLogsToCSV = (req, res) => {
   }
 
   try {
-    // Define fields to export
     const fields = [
       "id",
       "project",
@@ -125,12 +131,13 @@ const exportLogsToCSV = (req, res) => {
       "endTimeDisplay",
       "duration",
       "note",
+      "rate",
+      "earnedAmount",
     ];
     const opts = { fields };
     const parser = new Parser(opts);
     const csv = parser.parse(userLogs);
 
-    // Set headers
     res.header("Content-Type", "text/csv");
     res.attachment(`timelogs-${user}.csv`);
     return res.send(csv);
@@ -139,6 +146,7 @@ const exportLogsToCSV = (req, res) => {
     return res.status(500).json({ message: "Could not export logs" });
   }
 };
+
 module.exports = {
   startTimer,
   stopTimer,
