@@ -10,7 +10,7 @@ const path = require("path");
 const { Parser } = require("json2csv");
 
 const startTimer = async (req, res) => {
-  const { project, note, rate } = req.body; // Added rate
+  const { project, note, rate } = req.body;
   const user = req.user;
 
   if (!project) return res.status(400).json({ message: "Project is required" });
@@ -35,8 +35,8 @@ const startTimer = async (req, res) => {
     endTimeDisplay: null,
     duration: null,
     note: note || "",
-    rate: rate || null, // store the hourly rate if provided
-    earnedAmount: null, // will be calculated later
+    rate: rate || null, // Optional at start
+    earnedAmount: null
   };
 
   logsDB.setLogs([...logsDB.logs, newLog]);
@@ -50,6 +50,7 @@ const startTimer = async (req, res) => {
 
 const stopTimer = async (req, res) => {
   const { id } = req.params;
+  const { rate } = req.body; // Optional rate when stopping
   const user = req.user;
 
   const log = logsDB.logs.find(
@@ -70,10 +71,12 @@ const stopTimer = async (req, res) => {
     durationInMinutes !== 1 ? "s" : ""
   }`;
 
-  // If rate exists, calculate earnings
-  if (log.rate) {
+  // Use rate from stop request or stored rate
+  const finalRate = rate || log.rate;
+  if (finalRate) {
+    log.rate = finalRate; // Store latest rate
     const hours = durationInMinutes / 60;
-    log.earnedAmount = (hours * log.rate).toFixed(2); // 2 decimal points
+    log.earnedAmount = (hours * finalRate).toFixed(2);
   }
 
   await fsPromises.writeFile(
