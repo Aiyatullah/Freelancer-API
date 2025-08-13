@@ -16,3 +16,7 @@ router.route
 router.route("/export")
 .get(logTimeController.exportLogsToCSV)
 module.exports=router
+
+
+router.route('/earnings')
+.get(logTimeController.getEarningsSummary)
